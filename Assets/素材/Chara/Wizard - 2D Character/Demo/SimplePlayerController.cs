@@ -1,127 +1,156 @@
-﻿using UnityEngine;
+using UnityEngine;
+using System.Collections;
+using System.Collections.Generic;
 
-namespace ClearSky
+public class SimplePlayerController : MonoBehaviour
 {
-    public class SimplePlayerController : MonoBehaviour
+    public float movePower = 10f;
+    public float jumpPower = 15f;
+    public float GroundCheckLen = 0.1f;
+    public float jumpSpeedMul = 0.5f;
+
+    private Rigidbody2D rb;
+    private Animator anim;
+    private int direction = 1;
+    private bool isJumping = false;
+    private bool isOnGround = false;
+    private bool alive = true;
+
+
+    void Start()
     {
-        public float movePower = 10f;
-        public float jumpPower = 15f; //Set Gravity Scale in Rigidbody2D Component to 5
-
-        private Rigidbody2D rb;
-        private Animator anim;
-        Vector3 movement;
-        private int direction = 1;
-        bool isJumping = false;
-        private bool alive = true;
+        rb = GetComponent<Rigidbody2D>();
+        anim = GetComponent<Animator>();
+    }
 
 
-        // Start is called before the first frame update
-        void Start()
+    private void Update()
+    {
+        
+        Restart();
+        if (alive)
         {
-            rb = GetComponent<Rigidbody2D>();
-            anim = GetComponent<Animator>();
+            Hurt();
+            Die();
+            Attack();
+            Jump();
+            Run();
+
+        }
+    }
+    void FixedUpdate()
+    {
+        // 1：尝试制作能 只往上台阶，不能下来。可行，但会有瞬间卡顿，找别的方法
+        Vector2 pointA = transform.position;
+        Vector2 pointB = transform.position - new Vector3(0, GroundCheckLen, 0);
+        Debug.DrawLine(transform.position, transform.position - new Vector3(0, GroundCheckLen, 0), Color.white,  10.0f, true);
+        bool banded = Physics2D.Linecast(pointA, pointB, 1 << LayerMask.NameToLayer("Ground"));
+        bool ignore = !banded;
+        Physics2D.IgnoreLayerCollision(LayerMask.NameToLayer("Player"), LayerMask.NameToLayer("Ground"), ignore);
+    }
+    private void OnTriggerEnter2D(Collider2D other)
+    {
+        if (other.CompareTag("Ground"))
+        {
+            if (anim.GetBool("isJump") && rb.velocity.SqrMagnitude() < 0.1f)
+                anim.SetBool("isJump", false);
         }
 
-        private void Update()
+    }
+    private void OnTriggerStay2D(Collider2D other)
+    {
+        if (other.CompareTag("Ground"))
         {
-            Restart();
-            if (alive)
-            {
-                Hurt();
-                Die();
-                Attack();
-                Jump();
-                Run();
-
-            }
-        }
-        private void OnTriggerEnter2D(Collider2D other)
-        {
-            anim.SetBool("isJump", false);
+            if (anim.GetBool("isJump") && rb.velocity.SqrMagnitude() < 0.1f)
+                anim.SetBool("isJump", false);
         }
 
+    }
 
-        void Run()
+
+    void Run()
+    {
+        Vector3 moveVelocity = Vector3.zero;
+        anim.SetBool("isRun", false);
+
+
+        if (Input.GetAxisRaw("Horizontal") < 0)
         {
-            Vector3 moveVelocity = Vector3.zero;
-            anim.SetBool("isRun", false);
+            direction = -1;
+            moveVelocity = Vector3.left;
 
+            transform.localScale = new Vector3(direction, 1, 1);
+            if (!anim.GetBool("isJump"))
+                anim.SetBool("isRun", true);
 
-            if (Input.GetAxisRaw("Horizontal") < 0)
-            {
-                direction = -1;
-                moveVelocity = Vector3.left;
-
-                transform.localScale = new Vector3(direction, 1, 1);
-                if (!anim.GetBool("isJump"))
-                    anim.SetBool("isRun", true);
-
-            }
-            if (Input.GetAxisRaw("Horizontal") > 0)
-            {
-                direction = 1;
-                moveVelocity = Vector3.right;
-
-                transform.localScale = new Vector3(direction, 1, 1);
-                if (!anim.GetBool("isJump"))
-                    anim.SetBool("isRun", true);
-
-            }
-            transform.position += moveVelocity * movePower * Time.deltaTime;
         }
-        void Jump()
+        if (Input.GetAxisRaw("Horizontal") > 0)
         {
-            if ((Input.GetButtonDown("Jump") || Input.GetAxisRaw("Vertical") > 0)
-            && !anim.GetBool("isJump"))
-            {
-                isJumping = true;
-                anim.SetBool("isJump", true);
-            }
-            if (!isJumping)
-            {
-                return;
-            }
+            direction = 1;
+            moveVelocity = Vector3.right;
 
-            rb.velocity = Vector2.zero;
+            transform.localScale = new Vector3(direction, 1, 1);
+            if (!anim.GetBool("isJump"))
+                anim.SetBool("isRun", true);
 
-            Vector2 jumpVelocity = new Vector2(0, jumpPower);
-            rb.AddForce(jumpVelocity, ForceMode2D.Impulse);
+        }
+        if (isJumping) moveVelocity *= jumpSpeedMul;
 
-            isJumping = false;
-        }
-        void Attack()
+        rb.AddForce(moveVelocity, ForceMode2D.Impulse);
+        //transform.position += moveVelocity * movePower * Time.deltaTime;
+    }
+    void Jump()
+    {
+        if ((Input.GetButtonDown("Jump") || Input.GetAxisRaw("Vertical") > 0)
+        && !anim.GetBool("isJump"))
         {
-            if (Input.GetKeyDown(KeyCode.Alpha1))
-            {
-                anim.SetTrigger("attack");
-            }
+            isJumping = true;
+            anim.SetBool("isJump", true);
         }
-        void Hurt()
+        if (!isJumping)
         {
-            if (Input.GetKeyDown(KeyCode.Alpha2))
-            {
-                anim.SetTrigger("hurt");
-                if (direction == 1)
-                    rb.AddForce(new Vector2(-5f, 1f), ForceMode2D.Impulse);
-                else
-                    rb.AddForce(new Vector2(5f, 1f), ForceMode2D.Impulse);
-            }
+            return;
         }
-        void Die()
+
+        rb.velocity = Vector2.zero;
+
+        Vector2 jumpVelocity = new Vector2(0, jumpPower);
+        rb.AddForce(jumpVelocity, ForceMode2D.Impulse);
+
+      isJumping = false;
+    }
+    void Attack()
+    {
+        if (Input.GetKeyDown(KeyCode.Alpha1))
         {
-            if (Input.GetKeyDown(KeyCode.Alpha3))
-            {
-                anim.SetTrigger("die");
-                alive = false;
-            }
+            anim.SetTrigger("attack");
         }
-        void Restart()
+    }
+    void Hurt()
+    {
+        if (Input.GetKeyDown(KeyCode.Alpha2))
         {
-            if (Input.GetKeyDown(KeyCode.Alpha0))
-            {
-                anim.SetTrigger("idle");
-                alive = true;
-            }
+            anim.SetTrigger("hurt");
+            if (direction == 1)
+                rb.AddForce(new Vector2(-5f, 1f), ForceMode2D.Impulse);
+            else
+                rb.AddForce(new Vector2(5f, 1f), ForceMode2D.Impulse);
+        }
+    }
+    void Die()
+    {
+        if (Input.GetKeyDown(KeyCode.Alpha3))
+        {
+            anim.SetTrigger("die");
+            alive = false;
+        }
+    }
+    void Restart()
+    {
+        if (Input.GetKeyDown(KeyCode.Alpha0))
+        {
+            anim.SetTrigger("idle");
+            alive = true;
         }
     }
 }
