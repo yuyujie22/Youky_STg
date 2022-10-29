@@ -2,36 +2,36 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
-namespace TarodevController {
+namespace YoukyController
+{
     /// <summary>
-    /// Hey!
-    /// Tarodev here. I built this controller as there was a severe lack of quality & free 2D controllers out there.
-    /// Right now it only contains movement and jumping, but it should be pretty easy to expand... I may even do it myself
-    /// if there's enough interest. You can play and compete for best times here: https://tarodev.itch.io/
-    /// If you hve any questions or would like to brag about your score, come to discord: https://discord.gg/GqeHHnhHpz
+    /// 不使用其它多余组件实现多种移动
     /// </summary>
-    public class PlayerController : MonoBehaviour, IPlayerController {
-        // Public for external hooks
+    public class PlayerController : MonoBehaviour, IPlayerController
+    {
+        // 先实现extras的接口
         public Vector3 Velocity { get; private set; }
         public FrameInput Input { get; private set; }
         public bool JumpingThisFrame { get; private set; }
         public bool LandingThisFrame { get; private set; }
         public Vector3 RawMovement { get; private set; }
-        public bool Grounded => _colDown;
+        public bool Grounded => colDown;
 
-        private Vector3 _lastPosition;
-        private float _currentHorizontalSpeed, _currentVerticalSpeed;
+        private Vector3 lastPosition;
+        private float currentHorizontalSpeed, currentVerticalSpeed;
 
-        // This is horrible, but for some reason colliders are not fully established when update starts...
-        private bool _active;
+        // 为了防止游戏运行时碰撞体还没有完成生成而延迟0.5s使用Awake（）函数
+        private bool active;
+        //下面也可以这样写void Awake() => Invoke("Activate", 0.5f);
         void Awake() => Invoke(nameof(Activate), 0.5f);
-        void Activate() =>  _active = true;
-        
-        private void Update() {
-            if(!_active) return;
-            // Calculate velocity
-            Velocity = (transform.position - _lastPosition) / Time.deltaTime;
-            _lastPosition = transform.position;
+        void Activate() => active = true;
+
+        private void Update()
+        {
+            if (!active) return;
+            // 按照每帧的位置计算速度
+            Velocity = (transform.position - lastPosition) / Time.deltaTime;
+            lastPosition = transform.position;
 
             GatherInput();
             RunCollisionChecks();
@@ -47,14 +47,19 @@ namespace TarodevController {
 
         #region Gather Input
 
-        private void GatherInput() {
-            Input = new FrameInput {
+        private void GatherInput()
+        {
+            Input = new FrameInput
+            {
+                //按下抬起 起跳键
                 JumpDown = UnityEngine.Input.GetButtonDown("Jump"),
                 JumpUp = UnityEngine.Input.GetButtonUp("Jump"),
                 X = UnityEngine.Input.GetAxisRaw("Horizontal")
             };
-            if (Input.JumpDown) {
-                _lastJumpPressed = Time.time;
+            //记录当前跳跃的时间点
+            if (Input.JumpDown)
+            {
+                lastJumpPressed = Time.time;
             }
         }
 
@@ -62,73 +67,85 @@ namespace TarodevController {
 
         #region Collisions
 
-        [Header("COLLISION")] [SerializeField] private Bounds _characterBounds;
-        [SerializeField] private LayerMask _groundLayer;
-        [SerializeField] private int _detectorCount = 3;
-        [SerializeField] private float _detectionRayLength = 0.1f;
-        [SerializeField] [Range(0.1f, 0.3f)] private float _rayBuffer = 0.1f; // Prevents side detectors hitting the ground
+        [Header("COLLISION")][SerializeField] private Bounds characterBounds;
+        [SerializeField] private LayerMask groundLayer;
+        [SerializeField] private int detectorCount = 3;
+        [SerializeField] private float detectionRayLength = 0.1f;
+        [SerializeField][Range(0.1f, 0.3f)] private float rayBuffer = 0.1f; // Prevents side detectors hitting the ground
 
-        private RayRange _raysUp, _raysRight, _raysDown, _raysLeft;
-        private bool _colUp, _colRight, _colDown, _colLeft;
+        private RayRange raysUp, raysRight, raysDown, raysLeft;
+        private bool colUp, colRight, colDown, colLeft;
 
-        private float _timeLeftGrounded;
+        private float timeLeftGrounded;
 
-        // We use these raycast checks for pre-collision information
-        private void RunCollisionChecks() {
-            // Generate ray ranges. 
+        // 射线检测实现物理分析
+        private void RunCollisionChecks()
+        {
+            // 定义数据存储变量
             CalculateRayRanged();
 
-            // Ground
+            // 地面
             LandingThisFrame = false;
-            var groundedCheck = RunDetection(_raysDown);
-            if (_colDown && !groundedCheck) _timeLeftGrounded = Time.time; // Only trigger when first leaving
-            else if (!_colDown && groundedCheck) {
-                _coyoteUsable = true; // Only trigger when first touching
+            var groundedCheck = RunDetection(raysDown);
+            // 跳跃离开地面的一帧
+            if (colDown && !groundedCheck) timeLeftGrounded = Time.time; // Only trigger when first leaving
+            else if (!colDown && groundedCheck)
+            {
+                // 跳跃回到地面的一帧
+                coyoteUsable = true;
                 LandingThisFrame = true;
             }
+            // 同步
+            colDown = groundedCheck;
 
-            _colDown = groundedCheck;
+            // 其他方向
+            colUp = RunDetection(raysUp);
+            colLeft = RunDetection(raysLeft);
+            colRight = RunDetection(raysRight);
 
-            // The rest
-            _colUp = RunDetection(_raysUp);
-            _colLeft = RunDetection(_raysLeft);
-            _colRight = RunDetection(_raysRight);
 
-            bool RunDetection(RayRange range) {
-                return EvaluateRayPositions(range).Any(point => Physics2D.Raycast(point, range.Dir, _detectionRayLength, _groundLayer));
-            }
+        }
+        //获取数据
+        private bool RunDetection(RayRange range)
+        {
+            return EvaluateRayPositions(range).Any(point => Physics2D.Raycast(point, range.Dir, detectionRayLength, groundLayer));
+        }
+        private void CalculateRayRanged()
+        {
+            var b = new Bounds(transform.position, characterBounds.size);
+
+            raysDown = new RayRange(b.min.x + rayBuffer, b.min.y, b.max.x - rayBuffer, b.min.y, Vector2.down);
+            raysUp = new RayRange(b.min.x + rayBuffer, b.max.y, b.max.x - rayBuffer, b.max.y, Vector2.up);
+            raysLeft = new RayRange(b.min.x, b.min.y + rayBuffer, b.min.x, b.max.y - rayBuffer, Vector2.left);
+            raysRight = new RayRange(b.max.x, b.min.y + rayBuffer, b.max.x, b.max.y - rayBuffer, Vector2.right);
         }
 
-        private void CalculateRayRanged() {
-            // This is crying out for some kind of refactor. 
-            var b = new Bounds(transform.position, _characterBounds.size);
 
-            _raysDown = new RayRange(b.min.x + _rayBuffer, b.min.y, b.max.x - _rayBuffer, b.min.y, Vector2.down);
-            _raysUp = new RayRange(b.min.x + _rayBuffer, b.max.y, b.max.x - _rayBuffer, b.max.y, Vector2.up);
-            _raysLeft = new RayRange(b.min.x, b.min.y + _rayBuffer, b.min.x, b.max.y - _rayBuffer, Vector2.left);
-            _raysRight = new RayRange(b.max.x, b.min.y + _rayBuffer, b.max.x, b.max.y - _rayBuffer, Vector2.right);
-        }
-
-
-        private IEnumerable<Vector2> EvaluateRayPositions(RayRange range) {
-            for (var i = 0; i < _detectorCount; i++) {
-                var t = (float)i / (_detectorCount - 1);
+        private IEnumerable<Vector2> EvaluateRayPositions(RayRange range)
+        {
+            for (var i = 0; i < detectorCount; i++)
+            {
+                var t = (float)i / (detectorCount - 1);
                 yield return Vector2.Lerp(range.Start, range.End, t);
             }
         }
 
-        private void OnDrawGizmos() {
+        private void OnDrawGizmos()
+        {
             // Bounds
             Gizmos.color = Color.yellow;
-            Gizmos.DrawWireCube(transform.position + _characterBounds.center, _characterBounds.size);
+            Gizmos.DrawWireCube(transform.position + characterBounds.center, characterBounds.size);
 
             // Rays
-            if (!Application.isPlaying) {
+            if (!Application.isPlaying)
+            {
                 CalculateRayRanged();
                 Gizmos.color = Color.blue;
-                foreach (var range in new List<RayRange> { _raysUp, _raysRight, _raysDown, _raysLeft }) {
-                    foreach (var point in EvaluateRayPositions(range)) {
-                        Gizmos.DrawRay(point, range.Dir * _detectionRayLength);
+                foreach (var range in new List<RayRange> { raysUp, raysRight, raysDown, raysLeft })
+                {
+                    foreach (var point in EvaluateRayPositions(range))
+                    {
+                        Gizmos.DrawRay(point, range.Dir * detectionRayLength);
                     }
                 }
             }
@@ -137,8 +154,8 @@ namespace TarodevController {
 
             // Draw the future position. Handy for visualizing gravity
             Gizmos.color = Color.red;
-            var move = new Vector3(_currentHorizontalSpeed, _currentVerticalSpeed) * Time.deltaTime;
-            Gizmos.DrawWireCube(transform.position + move, _characterBounds.size);
+            var move = new Vector3(currentHorizontalSpeed, currentVerticalSpeed) * Time.deltaTime;
+            Gizmos.DrawWireCube(transform.position + move, characterBounds.size);
         }
 
         #endregion
@@ -146,31 +163,34 @@ namespace TarodevController {
 
         #region Walk
 
-        [Header("WALKING")] [SerializeField] private float _acceleration = 90;
-        [SerializeField] private float _moveClamp = 13;
-        [SerializeField] private float _deAcceleration = 60f;
-        [SerializeField] private float _apexBonus = 2;
+        [Header("WALKING")][SerializeField] private float acceleration = 90;
+        [SerializeField] private float moveClamp = 13;
+        [SerializeField] private float deAcceleration = 60f;
+        [SerializeField] private float apexBonus = 2;
 
-        private void CalculateWalk() {
-            if (Input.X != 0) {
-                // Set horizontal move speed
-                _currentHorizontalSpeed += Input.X * _acceleration * Time.deltaTime;
+        //X轴输入
+        private void CalculateWalk()
+        {
+            if (Input.X != 0)
+            {
+                currentHorizontalSpeed += Input.X * acceleration * Time.deltaTime;
+                //控制最大速度
+                currentHorizontalSpeed = Mathf.Clamp(currentHorizontalSpeed, -moveClamp, moveClamp);
 
-                // clamped by max frame movement
-                _currentHorizontalSpeed = Mathf.Clamp(_currentHorizontalSpeed, -_moveClamp, _moveClamp);
-
-                // Apply bonus at the apex of a jump
-                var apexBonus = Mathf.Sign(Input.X) * _apexBonus * _apexPoint;
-                _currentHorizontalSpeed += apexBonus * Time.deltaTime;
+                //跳跃时速度调整。计算0到最高点的比例值，在最高点时apexPoint为1
+                //Mathf.Sign() 如果是0或正数就返回1，负数则返回-1
+                var _apexBonus = Mathf.Sign(Input.X) * apexBonus * apexPoint;
+                currentHorizontalSpeed += _apexBonus * Time.deltaTime;
             }
-            else {
-                // No input. Let's slow the character down
-                _currentHorizontalSpeed = Mathf.MoveTowards(_currentHorizontalSpeed, 0, _deAcceleration * Time.deltaTime);
+            else
+            {
+                //没有输入X的速度->减速
+                currentHorizontalSpeed = Mathf.MoveTowards(currentHorizontalSpeed, 0, deAcceleration * Time.deltaTime);
             }
-
-            if (_currentHorizontalSpeed > 0 && _colRight || _currentHorizontalSpeed < 0 && _colLeft) {
-                // Don't walk through walls
-                _currentHorizontalSpeed = 0;
+            //撞墙
+            if (currentHorizontalSpeed > 0 && colRight || currentHorizontalSpeed < 0 && colLeft)
+            {
+                currentHorizontalSpeed = 0;
             }
         }
 
@@ -178,25 +198,30 @@ namespace TarodevController {
 
         #region Gravity
 
-        [Header("GRAVITY")] [SerializeField] private float _fallClamp = -40f;
-        [SerializeField] private float _minFallSpeed = 80f;
-        [SerializeField] private float _maxFallSpeed = 120f;
-        private float _fallSpeed;
+        [Header("GRAVITY")][SerializeField] private float fallClamp = -40f;
+        [SerializeField] private float minFallSpeed = 80f;
+        [SerializeField] private float maxFallSpeed = 120f;
+        private float fallSpeed;
 
-        private void CalculateGravity() {
-            if (_colDown) {
-                // Move out of the ground
-                if (_currentVerticalSpeed < 0) _currentVerticalSpeed = 0;
+        private void CalculateGravity()
+        {
+            //地面上
+            if (colDown)
+            {
+                //重置二段跳
+                canDoubleJump = true;
+                if (currentVerticalSpeed < 0) currentVerticalSpeed = 0;
             }
-            else {
-                // Add downward force while ascending if we ended the jump early
-                var fallSpeed = _endedJumpEarly && _currentVerticalSpeed > 0 ? _fallSpeed * _jumpEndEarlyGravityModifier : _fallSpeed;
+            else
+            {
+                // 提前送键的小跳，加速下落
+                var fallSpeed = endedJumpEarly && currentVerticalSpeed > 0 ? this.fallSpeed * jumpEndEarlyGravityModifier : this.fallSpeed;
 
-                // Fall
-                _currentVerticalSpeed -= fallSpeed * Time.deltaTime;
+                // 正常
+                currentVerticalSpeed -= fallSpeed * Time.deltaTime;
 
-                // Clamp
-                if (_currentVerticalSpeed < _fallClamp) _currentVerticalSpeed = _fallClamp;
+                // 限制速度
+                if (currentVerticalSpeed < fallClamp) currentVerticalSpeed = fallClamp;
             }
         }
 
@@ -204,50 +229,72 @@ namespace TarodevController {
 
         #region Jump
 
-        [Header("JUMPING")] [SerializeField] private float _jumpHeight = 30;
-        [SerializeField] private float _jumpApexThreshold = 10f;
-        [SerializeField] private float _coyoteTimeThreshold = 0.1f;
-        [SerializeField] private float _jumpBuffer = 0.1f;
-        [SerializeField] private float _jumpEndEarlyGravityModifier = 3;
-        private bool _coyoteUsable;
-        private bool _endedJumpEarly = true;
-        private float _apexPoint; // Becomes 1 at the apex of a jump
-        private float _lastJumpPressed;
-        private bool CanUseCoyote => _coyoteUsable && !_colDown && _timeLeftGrounded + _coyoteTimeThreshold > Time.time;
-        private bool HasBufferedJump => _colDown && _lastJumpPressed + _jumpBuffer > Time.time;
+        [Header("JUMPING")][SerializeField] private float jumpHeight = 30;
+        [SerializeField] private float jumpApexThreshold = 10f;
+        //二段跳的最长时间间隔
+        [SerializeField] private float coyoteTimeThreshold = 0.1f;
+        [SerializeField] private float jumpBuffer = 0.1f;
+        //如果endedJumpEarly为true，下落重力会乘jumpEndEarlyGravityModifier
+        [SerializeField] private float jumpEndEarlyGravityModifier = 3;
+        [SerializeField] private bool doubleJumpUsable = false;
+        //一次在空中最多跳两次，到达地面重置
+        private bool canDoubleJump = true;
+        private bool coyoteUsable;
+        private bool endedJumpEarly = true;
+        private float apexPoint;
+        private float lastJumpPressed;
+        private bool CanUseCoyote => coyoteUsable && !colDown && timeLeftGrounded + coyoteTimeThreshold > Time.time;
+        //lastJumpPressed + jumpBuffer > Time.time  （按下跳跃键后的jumpBuffer秒内）
+        private bool HasBufferedJump => colDown && lastJumpPressed + jumpBuffer > Time.time;
 
-        private void CalculateJumpApex() {
-            if (!_colDown) {
-                // Gets stronger the closer to the top of the jump
-                _apexPoint = Mathf.InverseLerp(_jumpApexThreshold, 0, Mathf.Abs(Velocity.y));
-                _fallSpeed = Mathf.Lerp(_minFallSpeed, _maxFallSpeed, _apexPoint);
+        private void CalculateJumpApex()
+        {
+            if (!colDown)
+            {
+                //跳跃时速度调整。计算0到最高点的比例值，在最高点时apexPoint为1
+                apexPoint = Mathf.InverseLerp(jumpApexThreshold, 0, Mathf.Abs(Velocity.y));
+                fallSpeed = Mathf.Lerp(minFallSpeed, maxFallSpeed, apexPoint);
             }
-            else {
-                _apexPoint = 0;
+            else
+            {
+                apexPoint = 0;
             }
         }
 
-        private void CalculateJump() {
-            // Jump if: grounded or within coyote threshold || sufficient jump buffer
-            if (Input.JumpDown && CanUseCoyote || HasBufferedJump) {
-                _currentVerticalSpeed = _jumpHeight;
-                _endedJumpEarly = false;
-                _coyoteUsable = false;
-                _timeLeftGrounded = float.MinValue;
+        private void CalculateJump()
+        {
+            // 在地面或者二段跳时间限制内 || 在跳跃缓冲内
+            if (Input.JumpDown && CanUseCoyote || HasBufferedJump)
+            {
+                currentVerticalSpeed = jumpHeight;
+                endedJumpEarly = false;
+                coyoteUsable = false;
+                timeLeftGrounded = float.MinValue;
                 JumpingThisFrame = true;
             }
-            else {
+            else
+            {
                 JumpingThisFrame = false;
             }
 
-            // End the jump early if button released
-            if (!_colDown && Input.JumpUp && !_endedJumpEarly && Velocity.y > 0) {
-                // _currentVerticalSpeed = 0;
-                _endedJumpEarly = true;
+            // 按键松开-> 加快下落（相当于小跳）
+            if (!colDown && Input.JumpUp && !endedJumpEarly && Velocity.y > 0)
+            {
+                endedJumpEarly = true;
+            }
+            //二段跳
+            if(doubleJumpUsable && canDoubleJump && endedJumpEarly&& Input.JumpDown){
+                currentVerticalSpeed = jumpHeight;
+                endedJumpEarly = false;
+                coyoteUsable = false;
+                timeLeftGrounded = float.MinValue;
+                JumpingThisFrame = true;
+                canDoubleJump = false;
             }
 
-            if (_colUp) {
-                if (_currentVerticalSpeed > 0) _currentVerticalSpeed = 0;
+            if (colUp)
+            {
+                if (currentVerticalSpeed > 0) currentVerticalSpeed = 0;
             }
         }
 
@@ -255,36 +302,43 @@ namespace TarodevController {
 
         #region Move
 
-        [Header("MOVE")] [SerializeField, Tooltip("Raising this value increases collision accuracy at the cost of performance.")]
-        private int _freeColliderIterations = 10;
+        [Header("MOVE")]
+        [SerializeField, Tooltip("提高该值会以性能为代价，增加碰撞检测精度")]
+        private int freeColliderIterations = 10;
 
-        // We cast our bounds before moving to avoid future collisions
-        private void MoveCharacter() {
+        // 我们在移动检测边界，以避免将来发生碰撞
+        private void MoveCharacter()
+        {
             var pos = transform.position;
-            RawMovement = new Vector3(_currentHorizontalSpeed, _currentVerticalSpeed); // Used externally
+            RawMovement = new Vector3(currentHorizontalSpeed, currentVerticalSpeed); // Used externally
             var move = RawMovement * Time.deltaTime;
             var furthestPoint = pos + move;
 
-            // check furthest movement. If nothing hit, move and don't do extra checks
-            var hit = Physics2D.OverlapBox(furthestPoint, _characterBounds.size, 0, _groundLayer);
-            if (!hit) {
+            // 检查之后的会移动的 最远！ 位置。如果没有命中，则移动，且不进行额外检查
+            var hit = Physics2D.OverlapBox(furthestPoint, characterBounds.size, 0, groundLayer);
+            if (!hit)
+            {
+                //正常移动
                 transform.position += move;
                 return;
             }
 
-            // otherwise increment away from current pos; see what closest position we can move to
+            // 否则远离当前位置；看看我们能移动到什么最接近的位置
             var positionToMoveTo = transform.position;
-            for (int i = 1; i < _freeColliderIterations; i++) {
-                // increment to check all but furthestPoint - we did that already
-                var t = (float)i / _freeColliderIterations;
+            for (int i = 1; i < freeColliderIterations; i++)
+            {
+                // 不断递增检测 除了最远的那个点（我们已经检测过了）
+                var t = (float)i / freeColliderIterations;
                 var posToTry = Vector2.Lerp(pos, furthestPoint, t);
 
-                if (Physics2D.OverlapBox(posToTry, _characterBounds.size, 0, _groundLayer)) {
+                if (Physics2D.OverlapBox(posToTry, characterBounds.size, 0, groundLayer))
+                {
                     transform.position = positionToMoveTo;
 
-                    // We've landed on a corner or hit our head on a ledge. Nudge the player gently
-                    if (i == 1) {
-                        if (_currentVerticalSpeed < 0) _currentVerticalSpeed = 0;
+                    // 我们落在一个角落或撞到了一个壁上。轻推玩家
+                    if (i == 1)
+                    {
+                        if (currentVerticalSpeed < 0) currentVerticalSpeed = 0;
                         var dir = transform.position - hit.transform.position;
                         transform.position += dir.normalized * move.magnitude;
                     }
