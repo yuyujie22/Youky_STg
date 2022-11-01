@@ -16,8 +16,8 @@ public class Bullet : MonoBehaviour
     [Range(0f, 1f)] // This is an offset that moves the impact effect slightly away from the point of impact to reduce clipping of the impact effect
     public float collideOffset = 0.15f;
     CircleCollider2D cirCol;
-    public float speed = 5.0f;
-    public float destroyTime = 1.0f;
+    public float speed = 20.0f;
+    public float destroyTime = 5.0f;
 
     private void Awake()
     {
@@ -52,7 +52,14 @@ public class Bullet : MonoBehaviour
             GameObject impactP = Instantiate(impactParticle, transform.position, transform.rotation) as GameObject; // Spawns impact effect    
             Destroy(impactP, 3.0f);
             ObjectPool.Instance.Push(gameObject);
+            if (collision.CompareTag("Enemy")) {
+                Attack(collision);
+            }
         }
+    }
+    virtual public void Attack(Collider2D collision)
+    {
+
     }
 
     IEnumerator RecycleObj(float time)
