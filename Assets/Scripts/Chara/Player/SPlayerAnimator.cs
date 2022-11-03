@@ -70,7 +70,7 @@ namespace YoukyController
             }
 
             // 跳跃
-            if (playerCon.JumpingThisFrame)
+            if (playerCon.JumpingThisFrame || !playerCon.Grounded)
             {
                 anim.SetTrigger(JumpKey);
                 anim.ResetTrigger(GroundedKey);
@@ -124,6 +124,7 @@ namespace YoukyController
 
         private void OnDisable()
         {
+            if(moveParticles)
             moveParticles.Stop();
         }
 

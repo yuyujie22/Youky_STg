@@ -10,22 +10,18 @@ public class Bullet : MonoBehaviour
     public GameObject projectileParticle;
     //生成
     public GameObject muzzleParticle;
-    private Rigidbody2D rb;
+    public Rigidbody2D rb;
     [Header("不存在collider时候的半径")]
     public float colliderRadius = 1f;
     [Range(0f, 1f)] // This is an offset that moves the impact effect slightly away from the point of impact to reduce clipping of the impact effect
     public float collideOffset = 0.15f;
-    CircleCollider2D cirCol;
     public float speed = 20.0f;
     public float destroyTime = 5.0f;
+    public float effectTime = 3.0f;
+    //反作用力
+    public float reactForce = 1.0f;
+    public float beatbackForce = 1.0f;
 
-    private void Awake()
-    {
-        rb = GetComponent<Rigidbody2D>();
-        cirCol = GetComponent<CircleCollider2D>();
-
-
-    }
 
     private void Start()
     {
@@ -48,12 +44,16 @@ public class Bullet : MonoBehaviour
     {
         if (!collision.CompareTag("Player"))
         {
-            Debug.Log("Boom" + collision.name);
+            //Debug.Log("Boom" + collision.name);
             GameObject impactP = Instantiate(impactParticle, transform.position, transform.rotation) as GameObject; // Spawns impact effect    
             Destroy(impactP, 3.0f);
             ObjectPool.Instance.Push(gameObject);
             if (collision.CompareTag("Enemy")) {
                 Attack(collision);
+                collision.GetComponent<StatusRecord>().StopLittle();
+
+                //击退
+                //BeatBack(collision);
             }
         }
     }
@@ -61,6 +61,11 @@ public class Bullet : MonoBehaviour
     {
 
     }
+    
+    //virtual public void BeatBack(Collider2D collision)
+    //{
+
+    //}
 
     IEnumerator RecycleObj(float time)
     {

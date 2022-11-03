@@ -18,20 +18,23 @@ namespace YoukyController
         public bool StopAttackingThisFrame { get; private set; }
         public Vector3 RawMovement { get; private set; }
         public bool Grounded => colDown;
+        [Header("子弹种类和按键")]
         //各种子弹的预制体
         public GameObject[] bulletPre;
+        //各种子弹的使用按键
+        public KeyCode[] bulletKeyCodes;
         // 弹幕间隔时间
         public float intervalTime = 0.1f;
         // 弹幕计时
         private float invokeTime;
+        private Rigidbody2D rb;
         // start方法中赋初值
         //下面也可以这样写void Awake() => Invoke("Activate", 0.5f);
-        void Awake() {
-            
+        void Awake()
+        {
+            rb = GetComponent<Rigidbody2D>();
             Invoke(nameof(Activate), 0.5f);
-            
-            
-        } 
+        }
         void Start()
         {
             Invoke(nameof(Register), 0.7f);
@@ -43,12 +46,11 @@ namespace YoukyController
 
         // 为了防止游戏运行时碰撞体还没有完成生成而延迟0.5s使用Awake（）函数
         private bool active;
-        
-        
         void Activate() => active = true;
-        private void Register() {
-            if(GameManager.Instance != null)
-            GameManager.Instance.RegisterPlayer(transform);
+        private void Register()
+        {
+            if (GameManager.Instance != null)
+                GameManager.Instance.RegisterPlayer(transform);
         }
 
         private void Update()
@@ -57,10 +59,13 @@ namespace YoukyController
             // 按照每帧的位置计算速度
             Velocity = (transform.position - lastPosition) / Time.deltaTime;
             lastPosition = transform.position;
+            if (!Grounded)
+            {
+                
+            }
 
             GatherInput();
             RunCollisionChecks();
-
             CalculateWalk(); // Horizontal movement
             CalculateJumpApex(); // Affects fall speed, so calculate before gravity
             CalculateGravity(); // Vertical movement
@@ -340,7 +345,7 @@ namespace YoukyController
         private void MoveCharacter()
         {
             var pos = transform.position;
-            RawMovement = new Vector3(currentHorizontalSpeed, currentVerticalSpeed); // Used externally
+            RawMovement = new Vector3(currentHorizontalSpeed, currentVerticalSpeed);
             var move = RawMovement * Time.deltaTime;
             var furthestPoint = pos + move;
 
@@ -385,31 +390,52 @@ namespace YoukyController
         #region Attack
         [SerializeField, Tooltip("提高该值会以性能为代价，增加碰撞检测精度")]
         private Transform attackPoint;
+        int flag = -1;
         private void Attack()
         {
-            iceAttack01();
+            //从player手持的攻击种类数组获取相关信息
+
+            if (flag == 1 || flag == -1)
+            {
+                magicAttack(1);
+            }
+            if (flag == 0 || flag == -1)
+            {
+                magicAttack(0);
+            }
+            if (flag == -1)
+            {
+                StopAttackingThisFrame = true;
+            }
         }
 
-        private void iceAttack01()
+
+        private void magicAttack(int i)
         {
+            Debug.Log("StopAttackingThisFrame: " + StopAttackingThisFrame);
             if (StopAttackingThisFrame) StopAttackingThisFrame = false;
-            if (AttackingThisFrame) {
+            if (AttackingThisFrame)
+            {
                 Vector2 pos = transform.position;
                 Vector2 direction = (Input.mousePos - pos).normalized;
                 //GameObject bullet = Instantiate(bulletPre, pos, Quaternion.identity);
-                GameObject bullet = ObjectPool.Instance.Get(bulletPre[0]);
-                if(attackPoint == null)
+                GameObject bullet = ObjectPool.Instance.Get(bulletPre[i]);
+
+                if (attackPoint == null)
                     bullet.transform.position = transform.position;
-                else 
+                else
                     bullet.transform.position = attackPoint.position;
                 bullet.GetComponent<Bullet>().SetSpeed(direction);
+                //反作用力
+
+                rb.AddForce(bulletPre[i].GetComponent<Bullet>().reactForce * ((direction.x > 0) ? Vector2.left : Vector2.right), ForceMode2D.Impulse);
+                //currentVerticalSpeed = bulletPre[i].GetComponent<Bullet>().reactForce * ((direction.x > 0) ? -1 : 1);
+
                 AttackingThisFrame = false;
-
-
             }
-            if (UnityEngine.Input.GetMouseButton(0))
+            if (UnityEngine.Input.GetKey(bulletKeyCodes[i]))
             {
-                
+                flag = i;
                 // 按键按下时进行计时
                 invokeTime += Time.deltaTime;
                 // 间隔时间大于自定义时间才执行
@@ -422,16 +448,18 @@ namespace YoukyController
                     // 实例化一次后计时归零
                     invokeTime = 0;
                 }
-
             }
-            
-            if (UnityEngine.Input.GetMouseButtonUp(0))
+
+            if (UnityEngine.Input.GetKeyUp(bulletKeyCodes[i]))
             {
+                Debug.Log("Up :" + bulletKeyCodes[i]);
+                flag = -1;
                 AttackingThisFrame = false;
                 StopAttackingThisFrame = true;
                 invokeTime = intervalTime;
             }
         }
+
         #endregion
 
     }
