@@ -4,6 +4,8 @@ using UnityEngine;
 
 namespace YoukyController
 {
+
+    
     /// <summary>
     /// 不使用其它多余组件实现多种移动
     /// </summary>
@@ -63,15 +65,17 @@ namespace YoukyController
             {
                 
             }
-
+            //收集所有输入
             GatherInput();
+            //碰撞检测
             RunCollisionChecks();
-            CalculateWalk(); // Horizontal movement
-            CalculateJumpApex(); // Affects fall speed, so calculate before gravity
-            CalculateGravity(); // Vertical movement
-            CalculateJump(); // Possibly overrides vertical
 
-            MoveCharacter(); // Actually perform the axis movement
+            CalculateWalk(); 
+            CalculateJumpApex(); 
+            CalculateGravity(); 
+            CalculateJump(); 
+
+            MoveCharacter(); 
 
             Attack();
 
@@ -105,7 +109,7 @@ namespace YoukyController
         [SerializeField] private LayerMask groundLayer;
         [SerializeField] private int detectorCount = 3;
         [SerializeField] private float detectionRayLength = 0.1f;
-        [SerializeField] [Range(0.1f, 0.3f)] private float rayBuffer = 0.1f; // Prevents side detectors hitting the ground
+        [SerializeField] [Range(0.1f, 1f)] private float rayBuffer = 0.1f; // Prevents side detectors hitting the ground
 
         private RayRange raysUp, raysRight, raysDown, raysLeft;
         private bool colUp, colRight, colDown, colLeft;
@@ -390,20 +394,21 @@ namespace YoukyController
         #region Attack
         [SerializeField, Tooltip("提高该值会以性能为代价，增加碰撞检测精度")]
         private Transform attackPoint;
-        int flag = -1;
+        int attackKind = -1;
         private void Attack()
         {
             //从player手持的攻击种类数组获取相关信息
 
-            if (flag == 1 || flag == -1)
+
+            if (attackKind == 1 || attackKind == -1)
             {
                 magicAttack(1);
             }
-            if (flag == 0 || flag == -1)
+            if (attackKind == 0 || attackKind == -1)
             {
                 magicAttack(0);
             }
-            if (flag == -1)
+            if (attackKind == -1)
             {
                 StopAttackingThisFrame = true;
             }
@@ -435,7 +440,7 @@ namespace YoukyController
             }
             if (UnityEngine.Input.GetKey(bulletKeyCodes[i]))
             {
-                flag = i;
+                attackKind = i;
                 // 按键按下时进行计时
                 invokeTime += Time.deltaTime;
                 // 间隔时间大于自定义时间才执行
@@ -453,7 +458,7 @@ namespace YoukyController
             if (UnityEngine.Input.GetKeyUp(bulletKeyCodes[i]))
             {
                 Debug.Log("Up :" + bulletKeyCodes[i]);
-                flag = -1;
+                attackKind = -1;
                 AttackingThisFrame = false;
                 StopAttackingThisFrame = true;
                 invokeTime = intervalTime;
